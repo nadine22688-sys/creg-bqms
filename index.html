@@ -539,7 +539,7 @@
     justify-content: stretch; align-items: stretch;
   }
   .announcer-wrap {
-    display: flex; flex-direction: column; height: 100vh;
+    display: flex; flex-direction: column; height: 100vh; position: relative;
     background: linear-gradient(160deg, #0F2F56 0%, #1B4F8A 50%, #0F2F56 100%);
   }
   .announcer-header {
@@ -608,6 +608,35 @@
     display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
     padding: 8px 20px 16px; flex-shrink: 0;
   }
+  /* Announcer activation overlay */
+  .ann-activate-overlay {
+    position: absolute; inset: 0; z-index: 100;
+    background: rgba(15,47,86,.97);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ann-activate-overlay.hidden { display: none; }
+  .ann-activate-box {
+    text-align: center; padding: 48px 40px; max-width: 420px;
+  }
+  .ann-activate-icon { font-size: 64px; margin-bottom: 20px; }
+  .ann-activate-title {
+    font-size: 28px; font-weight: 700; color: white;
+    font-family: var(--font); margin-bottom: 12px;
+  }
+  .ann-activate-sub {
+    font-size: 15px; color: rgba(255,255,255,.6);
+    font-family: var(--font); line-height: 1.6; margin-bottom: 36px;
+  }
+  .ann-activate-btn {
+    background: var(--primary-light); color: white;
+    border: none; border-radius: 50px; padding: 18px 48px;
+    font-size: 18px; font-weight: 700; font-family: var(--font);
+    cursor: pointer; transition: all .2s;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .ann-activate-btn:hover { background: #3B82F6; transform: translateY(-2px); }
+  .ann-activate-btn:active { transform: translateY(0); }
+
   .ann-hist-item {
     background: rgba(255,255,255,.07); border-radius: 8px;
     padding: 6px 14px; text-align: center; font-family: var(--mono);
@@ -905,6 +934,15 @@
       <div class="announcer-logo">CReg BQMS</div>
       <div class="announcer-sub">Central Registration — Announcement Display</div>
       <button class="announcer-logout" onclick="doLogout()">Logout</button>
+    </div>
+    <!-- Activation overlay — required to unlock browser audio -->
+    <div class="ann-activate-overlay" id="ann-activate-overlay">
+      <div class="ann-activate-box">
+        <div class="ann-activate-icon">🔊</div>
+        <div class="ann-activate-title">CReg BQMS Announcer</div>
+        <div class="ann-activate-sub">Tap the button below to activate voice announcements.<br>Connect your speaker before starting.</div>
+        <button class="ann-activate-btn" onclick="activateAnnouncer()">Tap to Start Announcer</button>
+      </div>
     </div>
     <div class="announcer-main">
       <div class="announcer-now-label" id="ann-now-label">WAITING FOR NEXT TICKET...</div>
@@ -2244,9 +2282,33 @@ let announcerSpeaking = false;
 
 function initAnnouncer() {
   requestWakeLock();
+  // Don't start listeners yet — wait for user tap to unlock audio
+  // listenAnnouncerQueue and listenAnnouncerQueueCounts called after activation
+}
+
+window.activateAnnouncer = function() {
+  // This runs on user tap — unlocks browser audio policy
+  const overlay = document.getElementById('ann-activate-overlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Prime the speech synthesis with a silent utterance to unlock it
+  if (window.speechSynthesis) {
+    // Load voices first
+    window.speechSynthesis.getVoices();
+    const primer = new SpeechSynthesisUtterance('');
+    primer.volume = 0;
+    window.speechSynthesis.speak(primer);
+  }
+
+  // Now start Firebase listeners
   listenAnnouncerQueue();
   listenAnnouncerQueueCounts();
-}
+
+  // Play a short test announcement so staff know it's working
+  setTimeout(() => {
+    speakAnnouncement('Announcer is now active. Ready to call tickets.');
+  }, 800);
+};
 
 function listenAnnouncerQueue() {
   const qRef = ref(db, 'queue');
@@ -2307,24 +2369,41 @@ function displayAndAnnounce(ticket) {
 }
 
 function speakAnnouncement(text) {
-  if (!window.speechSynthesis) return;
-  // Cancel any ongoing speech
+  if (!window.speechSynthesis) { console.warn('TTS not supported'); return; }
+
   window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang  = 'en-PH';
-  utterance.rate  = 0.88;
-  utterance.pitch = 1.0;
-  utterance.volume = 1.0;
+  function doSpeak() {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang   = 'en-US';
+    utterance.rate   = 0.85;
+    utterance.pitch  = 1.0;
+    utterance.volume = 1.0;
 
-  // Try to use a clear English voice
+    const voices = window.speechSynthesis.getVoices();
+    // Prefer clear English voices
+    const preferred = voices.find(v => v.name === 'Google US English')
+      || voices.find(v => v.name === 'Samantha')
+      || voices.find(v => v.name.includes('Zira'))
+      || voices.find(v => v.lang === 'en-US' && !v.name.includes('Male'))
+      || voices.find(v => v.lang.startsWith('en-'))
+      || voices[0];
+    if (preferred) utterance.voice = preferred;
+
+    utterance.onerror = e => console.warn('TTS error:', e.error);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // Voices may not be loaded yet — wait if needed
   const voices = window.speechSynthesis.getVoices();
-  const preferred = voices.find(v =>
-    v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Samantha'))
-  ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
-  if (preferred) utterance.voice = preferred;
-
-  window.speechSynthesis.speak(utterance);
+  if (voices.length > 0) {
+    doSpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      doSpeak();
+    };
+  }
 }
 
 function listenAnnouncerQueueCounts() {
