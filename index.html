@@ -533,6 +533,88 @@
   .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 
   /* Wake lock indicator */
+  /* ── ANNOUNCER SCREEN ── */
+  #screen-announcer {
+    background: var(--primary-dark);
+    justify-content: stretch; align-items: stretch;
+  }
+  .announcer-wrap {
+    display: flex; flex-direction: column; height: 100vh;
+    background: linear-gradient(160deg, #0F2F56 0%, #1B4F8A 50%, #0F2F56 100%);
+  }
+  .announcer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,.1);
+    flex-shrink: 0;
+  }
+  .announcer-logo { font-size: 18px; font-weight: 700; color: white; font-family: var(--font); }
+  .announcer-sub { font-size: 12px; color: rgba(255,255,255,.5); font-family: var(--font); }
+  .announcer-logout {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+    color: rgba(255,255,255,.6); padding: 6px 14px; border-radius: 6px;
+    font-family: var(--font); font-size: 12px; cursor: pointer;
+  }
+  .announcer-main {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .announcer-now-label {
+    font-size: 14px; font-weight: 700; color: rgba(255,255,255,.5);
+    letter-spacing: 3px; text-transform: uppercase; margin-bottom: 16px;
+    font-family: var(--font);
+  }
+  .announcer-ticket {
+    font-family: var(--mono); font-size: clamp(80px, 18vw, 160px);
+    font-weight: 500; color: white; line-height: 1;
+    text-shadow: 0 8px 32px rgba(0,0,0,.4);
+    animation: none; transition: all .3s ease;
+  }
+  .announcer-ticket.flash { animation: ticketFlash .6s ease; }
+  @keyframes ticketFlash {
+    0% { transform: scale(1); opacity: 1; }
+    30% { transform: scale(1.08); opacity: .8; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .announcer-counter {
+    font-size: clamp(24px, 5vw, 48px); font-weight: 700;
+    color: #FCD34D; margin-top: 12px; font-family: var(--font);
+  }
+  .announcer-service {
+    font-size: clamp(14px, 3vw, 22px); color: rgba(255,255,255,.65);
+    margin-top: 8px; font-family: var(--font);
+  }
+  .announcer-footer {
+    flex-shrink: 0; padding: 12px 20px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .announcer-queue-bar {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  }
+  .ann-q-pill {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15);
+    border-radius: 20px; padding: 4px 12px; font-size: 12px;
+    color: rgba(255,255,255,.7); font-family: var(--mono);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ann-q-pill .ann-q-prefix { font-weight: 700; color: white; }
+  .ann-q-pill.ann-q-warn { background: rgba(217,119,6,.3); border-color: rgba(217,119,6,.5); }
+  .ann-q-pill.ann-q-alert { background: rgba(232,69,60,.3); border-color: rgba(232,69,60,.5); }
+  .announcer-history-label {
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,.3);
+    letter-spacing: 1px; text-transform: uppercase; text-align: center;
+    padding: 0 20px 4px; font-family: var(--font); flex-shrink: 0;
+  }
+  .announcer-history {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+    padding: 8px 20px 16px; flex-shrink: 0;
+  }
+  .ann-hist-item {
+    background: rgba(255,255,255,.07); border-radius: 8px;
+    padding: 6px 14px; text-align: center; font-family: var(--mono);
+  }
+  .ann-hist-num { font-size: 18px; font-weight: 500; color: rgba(255,255,255,.7); }
+  .ann-hist-ctr { font-size: 10px; color: rgba(255,255,255,.35); margin-top: 2px; }
+
   .wake-indicator { position: fixed; bottom: 8px; right: 8px; background: rgba(22,163,74,.15); color: var(--success); font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 600; z-index: 100; }
 </style>
 </head>
@@ -797,6 +879,7 @@
               <option value="cashier">PSS – Cashier</option>
               <option value="medtech">MedTech</option>
               <option value="issuer">Queue Issuer</option>
+              <option value="announcer">Announcer Display</option>
               <option value="tl">Team Leader</option>
             </select>
           </div>
@@ -810,6 +893,30 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     ANNOUNCER SCREEN
+═══════════════════════════════════════════════════════════ -->
+<div id="screen-announcer" class="screen">
+  <div class="announcer-wrap">
+    <div class="announcer-header">
+      <div class="announcer-logo">CReg BQMS</div>
+      <div class="announcer-sub">Central Registration — Announcement Display</div>
+      <button class="announcer-logout" onclick="doLogout()">Logout</button>
+    </div>
+    <div class="announcer-main">
+      <div class="announcer-now-label" id="ann-now-label">WAITING FOR NEXT TICKET...</div>
+      <div class="announcer-ticket" id="ann-ticket">—</div>
+      <div class="announcer-counter" id="ann-counter"></div>
+      <div class="announcer-service" id="ann-service"></div>
+    </div>
+    <div class="announcer-footer">
+      <div class="announcer-queue-bar" id="ann-queue-bar"></div>
+    </div>
+    <div class="announcer-history-label">Recent Calls</div>
+    <div class="announcer-history" id="ann-history"></div>
   </div>
 </div>
 
@@ -951,6 +1058,9 @@ onAuthStateChanged(auth, async user => {
       } else if (currentRole === 'tl') {
         showScreen('tl');
         initTL();
+      } else if (currentRole === 'announcer') {
+        showScreen('announcer');
+        initAnnouncer();
       }
     }
   } else {
@@ -2125,6 +2235,140 @@ async function bootstrapIfNeeded() {
   // TL must create accounts from Admin panel using the Add Staff function
   // Just mark as bootstrapped and show a first-run message
   await set(ref(db,'config/bootstrapped'), true);
+}
+
+// ── ANNOUNCER ────────────────────────────────────────────────
+let announcerLastTicketId = null;
+let announcerHistory = [];
+let announcerSpeaking = false;
+
+function initAnnouncer() {
+  requestWakeLock();
+  listenAnnouncerQueue();
+  listenAnnouncerQueueCounts();
+}
+
+function listenAnnouncerQueue() {
+  const qRef = ref(db, 'queue');
+  const listener = onValue(qRef, snap => {
+    if (!snap.exists()) return;
+
+    // Find all in_progress tickets sorted by timeServed descending
+    const inProgress = [];
+    snap.forEach(child => {
+      const d = child.val();
+      if (d.status === 'in_progress' && d.timeServed && d.agentName && d.counterName) {
+        inProgress.push({ id: child.key, ...d });
+      }
+    });
+    inProgress.sort((a, b) => b.timeServed - a.timeServed);
+
+    if (inProgress.length === 0) return;
+
+    const latest = inProgress[0];
+
+    // Only announce if this is a new ticket being called
+    if (latest.id !== announcerLastTicketId) {
+      announcerLastTicketId = latest.id;
+      displayAndAnnounce(latest);
+    }
+  }, { onlyOnce: false });
+  queueListeners.push({ ref: qRef, listener });
+}
+
+function displayAndAnnounce(ticket) {
+  // Update display
+  const ticketEl  = document.getElementById('ann-ticket');
+  const counterEl = document.getElementById('ann-counter');
+  const serviceEl = document.getElementById('ann-service');
+  const labelEl   = document.getElementById('ann-now-label');
+
+  if (!ticketEl) return;
+
+  ticketEl.textContent  = ticket.ticketNumber;
+  counterEl.textContent = ticket.counterName;
+  serviceEl.textContent = ticket.service;
+  labelEl.textContent   = 'NOW SERVING';
+
+  // Flash animation
+  ticketEl.classList.remove('flash');
+  void ticketEl.offsetWidth; // force reflow
+  ticketEl.classList.add('flash');
+
+  // Add to history
+  announcerHistory.unshift({ num: ticket.ticketNumber, counter: ticket.counterName });
+  if (announcerHistory.length > 8) announcerHistory.pop();
+  renderAnnouncerHistory();
+
+  // Speak the announcement
+  const text = 'Now serving ticket ' + ticket.ticketNumber.split('').join(' ')
+    + ' at ' + ticket.counterName;
+  speakAnnouncement(text);
+}
+
+function speakAnnouncement(text) {
+  if (!window.speechSynthesis) return;
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang  = 'en-PH';
+  utterance.rate  = 0.88;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  // Try to use a clear English voice
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v =>
+    v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Samantha'))
+  ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+  if (preferred) utterance.voice = preferred;
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function listenAnnouncerQueueCounts() {
+  const qRef = ref(db, 'queue');
+  const listener = onValue(qRef, snap => {
+    const counts = {};
+    SERVICES.forEach(s => { counts[s.prefix] = 0; });
+    if (snap.exists()) {
+      snap.forEach(child => {
+        const d = child.val();
+        if (d.status === 'waiting' && counts[d.prefix] !== undefined) counts[d.prefix]++;
+      });
+    }
+    renderAnnouncerQueueBar(counts);
+  }, { onlyOnce: false });
+  queueListeners.push({ ref: qRef, listener });
+}
+
+function renderAnnouncerQueueBar(counts) {
+  const bar = document.getElementById('ann-queue-bar');
+  if (!bar) return;
+  let html = '';
+  SERVICES.forEach(s => {
+    const c = counts[s.prefix] || 0;
+    if (c === 0) return;
+    const cls = c >= 10 ? ' ann-q-alert' : c >= 5 ? ' ann-q-warn' : '';
+    html += '<div class="ann-q-pill' + cls + '">'
+      + '<span class="ann-q-prefix">' + s.prefix + '</span>'
+      + '<span>' + s.name.split(' ')[0] + ' ' + s.type + '</span>'
+      + '<span style="font-weight:700;color:' + (c>=10?'#FCA5A5':c>=5?'#FCD34D':'white') + '">' + c + '</span>'
+      + '</div>';
+  });
+  bar.innerHTML = html || '<span style="color:rgba(255,255,255,.3);font-size:12px;font-family:var(--font)">No patients currently waiting</span>';
+}
+
+function renderAnnouncerHistory() {
+  const el = document.getElementById('ann-history');
+  if (!el) return;
+  el.innerHTML = announcerHistory.map((h, i) =>
+    '<div class="ann-hist-item" style="opacity:' + (1 - i * 0.1) + '">'
+    + '<div class="ann-hist-num">' + h.num + '</div>'
+    + '<div class="ann-hist-ctr">' + h.counter + '</div>'
+    + '</div>'
+  ).join('');
 }
 
 bootstrapIfNeeded();
