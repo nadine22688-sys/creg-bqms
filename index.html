@@ -792,6 +792,13 @@
     <div class="ki-hospital">Makati Medical Center</div>
     <div class="ki-title">Central Registration</div>
     <div class="ki-tap">Tap anywhere to get your queue number</div>
+    <!-- Ticket recall banner — shown if patient already has a ticket today -->
+    <div id="ki-recall-banner" style="display:none;margin-top:20px;background:white;border-radius:14px;padding:14px 24px;box-shadow:0 4px 16px rgba(27,79,138,.12);border:2px solid #BFDBFE;text-align:center;">
+      <div style="font-size:11px;color:#64748B;font-family:sans-serif;margin-bottom:4px;">YOUR QUEUE NUMBER</div>
+      <div id="ki-recall-num" style="font-family:monospace;font-size:40px;font-weight:700;color:#1B4F8A;line-height:1;"></div>
+      <div id="ki-recall-svc" style="font-size:13px;color:#64748B;margin-top:4px;font-family:sans-serif;"></div>
+      <div id="ki-recall-time" style="font-size:11px;color:#94A3B8;margin-top:2px;font-family:sans-serif;"></div>
+    </div>
     <div class="ki-pulse"></div>
   </div>
 
@@ -1476,6 +1483,14 @@ let kioskIdleLongPress = null;
 // ── KIOSK ──────────────────────────────────────────────────
 function initIssuer() {
   requestWakeLock();
+  // Only show STAFF button on tablet (screen > 768px)
+  // Hide it on mobile phones accessing via QR code
+  var staffBtn = document.getElementById('kiosk-tl-btn');
+  if (staffBtn) {
+    if (window.innerWidth < 768) {
+      staffBtn.style.display = 'none';
+    }
+  }
   setupKioskLongPress();
   kioskShowIdle();
 }
@@ -1509,6 +1524,25 @@ function kioskShowIdle() {
   document.getElementById('kiosk-service').style.display = 'none';
   document.getElementById('kiosk-priority').style.display = 'none';
   document.getElementById('kiosk-ticket').style.display = 'none';
+  // Show recalled ticket if patient already has one today
+  try {
+    var saved = localStorage.getItem('bqms_my_ticket');
+    if (saved) {
+      var t = JSON.parse(saved);
+      var today = new Date().toLocaleDateString('en-PH');
+      var banner = document.getElementById('ki-recall-banner');
+      if (t.date === today && banner) {
+        document.getElementById('ki-recall-num').textContent = t.num;
+        document.getElementById('ki-recall-svc').textContent = t.svc;
+        document.getElementById('ki-recall-time').textContent = 'Issued at ' + t.time;
+        banner.style.display = 'block';
+      } else if (banner) {
+        banner.style.display = 'none';
+        // Clear old ticket from different day
+        if (t.date !== today) localStorage.removeItem('bqms_my_ticket');
+      }
+    }
+  } catch(e) {}
 }
 
 function kioskWakeUp() {
@@ -1573,6 +1607,18 @@ window.kioskIssueTicket = async function(isPriority) {
   document.getElementById('kiosk-service').style.display = 'none';
   document.getElementById('kiosk-priority').style.display = 'none';
   document.getElementById('kiosk-ticket').style.display = 'flex';
+
+  // Save ticket to localStorage so patient can recall it
+  try {
+    var ticketData = {
+      num: ticketNum,
+      svc: fullService.label,
+      priority: isPriority,
+      time: new Date().toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', hour12:true }),
+      date: new Date().toLocaleDateString('en-PH')
+    };
+    localStorage.setItem('bqms_my_ticket', JSON.stringify(ticketData));
+  } catch(e) {}
 
   playChime();
   kioskStartReturnTimer();
