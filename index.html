@@ -1061,7 +1061,11 @@
         <div class="topbar-sub" id="tl-agent-label">ncaringal</div>
       </div>
     </div>
-    <div class="topbar-right">
+    <div class="topbar-right" style="gap:8px;">
+      <button class="btn btn-sm btn-outline" onclick="tlActAsPSS()" title="Act as PSS" style="font-size:12px;padding:6px 12px;display:flex;align-items:center;gap:5px;">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Act as PSS
+      </button>
       <button class="icon-btn" onclick="doLogout()" title="Logout">
         <svg viewBox="0 0 24 24" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -1793,6 +1797,32 @@ function initPSS() {
   document.getElementById('pss-agent-label').textContent = currentAgentName;
   listenPSSQueue();
   listenQueueStatusBar();
+  preloadVoices();
+  // If TL is acting as PSS, add "Back to TL Dashboard" button
+  if (window._tlActingAsPSS) {
+    const topbarRight = document.querySelector('#screen-pss .topbar-right');
+    if (topbarRight && !document.getElementById('back-to-tl-btn')) {
+      const backBtn = document.createElement('button');
+      backBtn.id = 'back-to-tl-btn';
+      backBtn.className = 'btn btn-sm btn-outline';
+      backBtn.style.cssText = 'font-size:12px;padding:6px 12px;display:flex;align-items:center;gap:5px;margin-right:4px;';
+      backBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> TL Dashboard';
+      backBtn.onclick = async function() {
+        window._tlActingAsPSS = false;
+        currentRole = 'tl';
+        // Clear counter presence
+        if (currentCounter) {
+          try { await update(ref(db, 'counters/' + currentCounter), { status:'offline', activeTicket:'', activeTicketId:'', agentName:'', agentId:'' }); } catch(e) {}
+        }
+        currentCounter = null;
+        const btn = document.getElementById('back-to-tl-btn');
+        if (btn) btn.remove();
+        showScreen('tl');
+        initTL();
+      };
+      topbarRight.insertBefore(backBtn, topbarRight.firstChild);
+    }
+  }
 }
 
 // Queue Status Bar — shows all-service waiting counts for PSS
@@ -3217,9 +3247,93 @@ function initIssuerAlerts() {
   }
 }
 
+// ── TL ACT AS PSS ────────────────────────────────────────────
+var _tlSelectedCounter = null;
+
+window.tlActAsPSS = function() {
+  _tlSelectedCounter = null;
+  var grid = document.getElementById('tl-pss-counter-grid');
+  var confirmBtn = document.getElementById('tl-pss-confirm-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.style.opacity = '.5';
+  grid.innerHTML = '';
+
+  var available = COUNTERS.filter(function(c) { return c.id !== 'extraction'; });
+  available.forEach(function(c) {
+    var btn = document.createElement('div');
+    btn.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:10px;border:1.5px solid #E2E8F0;cursor:pointer;transition:all .15s;background:#F8FAFC;';
+    btn.innerHTML = '<div><div style="font-size:14px;font-weight:700;color:#1E3A5F;">' + c.label + '</div>'
+      + '<div style="font-size:12px;color:#94A3B8;">' + (c.role === 'cashier' ? 'Cashier' : 'Registration') + '</div></div>'
+      + '<div style="width:20px;height:20px;border-radius:50%;border:2px solid #CBD5E1;" id="tl-pss-dot-' + c.id + '"></div>';
+    btn.onclick = function() {
+      grid.querySelectorAll('[id^=tl-pss-dot]').forEach(function(d) {
+        d.style.background = '';
+        d.style.borderColor = '#CBD5E1';
+        d.parentElement.style.borderColor = '#E2E8F0';
+        d.parentElement.style.background = '#F8FAFC';
+      });
+      var dot = document.getElementById('tl-pss-dot-' + c.id);
+      dot.style.background = '#1B4F8A';
+      dot.style.borderColor = '#1B4F8A';
+      btn.style.borderColor = '#1B4F8A';
+      btn.style.background = '#EFF6FF';
+      _tlSelectedCounter = c.id;
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = '1';
+    };
+    grid.appendChild(btn);
+  });
+
+  document.getElementById('tl-pss-modal').style.display = 'flex';
+};
+
+window.tlPSSConfirm = async function() {
+  if (!_tlSelectedCounter) return;
+  document.getElementById('tl-pss-modal').style.display = 'none';
+
+  // Set counter and switch to PSS screen
+  currentCounter = _tlSelectedCounter;
+  currentRole = 'pss';
+
+  // Register presence at counter
+  try {
+    await update(ref(db, 'counters/' + currentCounter), {
+      agentName: currentAgentName,
+      agentId: currentUser.uid,
+      status: 'active',
+      activeTicket: '',
+      activeTicketId: ''
+    });
+  } catch(e) { console.warn('Counter register error:', e); }
+
+  // Add "Back to TL" button by storing flag
+  window._tlActingAsPSS = true;
+  showScreen('pss');
+  initPSS();
+};
+
 // Enter key on login
 document.getElementById('login-username').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-password').focus(); });
 </script>
+  <!-- TL Act as PSS — Counter Picker Modal -->
+  <div id="tl-pss-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(15,47,86,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+    <div style="background:white;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <div style="font-size:18px;font-weight:700;color:#1E3A5F;margin-bottom:4px;">Act as PSS</div>
+      <div style="font-size:13px;color:#64748B;margin-bottom:20px;">Select a counter to serve patients. You can return to TL dashboard anytime.</div>
+      <div id="tl-pss-counter-grid" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="tlPSSConfirm()" id="tl-pss-confirm-btn" disabled
+          style="flex:1;background:#1B4F8A;color:white;border:none;padding:13px;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;opacity:.5;">
+          Go to Counter
+        </button>
+        <button onclick="document.getElementById('tl-pss-modal').style.display='none'"
+          style="flex:1;background:white;border:1.5px solid #E2E8F0;padding:13px;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:600;color:#475569;cursor:pointer;">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Patient alert overlay — shown when number is next or being called -->
   <div id="patient-alert">
     <div class="pa-icon" id="pa-icon"></div>
