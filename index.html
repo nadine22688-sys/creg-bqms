@@ -1639,8 +1639,12 @@ window.kioskWarnKeep = function() {
 };
 
 window.kioskWarnNew = function() {
-  // Patient wants a new number — clear old ticket and go to service selection
+  // Patient wants a new number — clear old ticket, detach old listener
   try { localStorage.removeItem('bqms_my_ticket'); } catch(e) {}
+  if (_patientAlertListener) {
+    try { _patientAlertListener(); } catch(e) {}
+    _patientAlertListener = null;
+  }
   _patientAlertShown = false;
   document.getElementById('kiosk-warn').style.display = 'none';
   kioskShowService();
@@ -1714,6 +1718,8 @@ window.kioskIssueTicket = async function(isPriority) {
       date: new Date().toLocaleDateString('en-PH')
     };
     localStorage.setItem('bqms_my_ticket', JSON.stringify(ticketData));
+    // Restart alert listener with the new ticket number
+    startPatientAlertListener();
   } catch(e) {}
 
   playChime();
@@ -3094,6 +3100,12 @@ var _patientAlertShown = false;
 
 function startPatientAlertListener() {
   if (!_isKioskMode) return;
+  // Detach previous listener before starting a new one
+  if (_patientAlertListener) {
+    try { _patientAlertListener(); } catch(e) {}
+    _patientAlertListener = null;
+  }
+  _patientAlertShown = false;
   try {
     var saved = JSON.parse(localStorage.getItem('bqms_my_ticket') || 'null');
     if (!saved || !saved.num) return;
