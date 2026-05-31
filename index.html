@@ -3116,7 +3116,7 @@ function startPatientAlertListener() {
     var qRef = ref(db, 'queue');
     _patientAlertListener = onValue(qRef, function(snap) {
       if (!snap.exists()) return;
-      var waiting = [], myStatus = null, myCounter = '';
+      var myStatus = null, myCounter = '';
 
       snap.forEach(function(child) {
         var d = child.val();
@@ -3124,23 +3124,14 @@ function startPatientAlertListener() {
           myStatus = d.status;
           myCounter = d.counterName || '';
         }
-        // Count waiting tickets with same prefix ahead of mine
-        if (d.prefix === myPrefix && d.status === 'waiting') {
-          var theirNum = parseInt(d.ticketNumber.slice(1));
-          var myNum    = parseInt(myTicket.slice(1));
-          if (theirNum < myNum) waiting.push(d.ticketNumber);
-        }
       });
 
       if (myStatus === 'in_progress' && !_patientAlertShown) {
-        // Being called right now
+        // Ticket is being called right now — only reliable trigger
         _patientAlertShown = true;
         showPatientAlert('now', myTicket, myCounter);
-      } else if (myStatus === 'waiting' && waiting.length === 1 && !_patientAlertShown) {
-        // 1 person ahead — get ready
-        showPatientAlert('next', myTicket, '');
-      } else if (myStatus === 'waiting' && waiting.length > 1) {
-        // Reset so alert can show again when they're next
+      } else if (!myStatus || myStatus === 'done' || myStatus === 'cancelled') {
+        // Ticket no longer active — reset
         _patientAlertShown = false;
       }
     });
