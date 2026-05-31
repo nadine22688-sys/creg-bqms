@@ -546,6 +546,29 @@
   .ann-hist-ctr { font-size: 10px; color: rgba(255,255,255,.35); margin-top: 2px; }
 
   .wake-indicator { position: fixed; bottom: 8px; right: 8px; background: rgba(22,163,74,.15); color: var(--success); font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 600; z-index: 100; }
+  /* ── PATIENT ALERT OVERLAY ── */
+  #patient-alert {
+    display: none; position: fixed; inset: 0; z-index: 99999;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; text-align: center;
+  }
+  #patient-alert.next { background: linear-gradient(160deg, #FFFBEB, #FEF3C7); }
+  #patient-alert.now  { background: linear-gradient(160deg, #F0FDF4, #DCFCE7); }
+  .pa-icon { font-size: 64px; margin-bottom: 12px; }
+  .pa-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .pa-next .pa-title { color: #92400E; }
+  .pa-now  .pa-title { color: #14532D; }
+  .pa-msg { font-size: 15px; line-height: 1.6; margin-bottom: 20px; }
+  .pa-next .pa-msg { color: #78350F; }
+  .pa-now  .pa-msg  { color: #166534; }
+  .pa-ticket { font-family: var(--mono); font-size: 72px; font-weight: 700; line-height: 1; letter-spacing: 4px; margin-bottom: 6px; }
+  .pa-next .pa-ticket { color: #D97706; }
+  .pa-now  .pa-ticket { color: #16A34A; }
+  .pa-counter { font-size: 16px; font-weight: 600; margin-bottom: 24px; }
+  .pa-next .pa-counter { color: #92400E; }
+  .pa-now  .pa-counter { color: #14532D; }
+  .pa-dismiss { background: white; border: 2px solid #E2E8F0; border-radius: 12px; padding: 14px 32px; font-family: var(--font); font-size: 15px; font-weight: 700; color: #475569; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+
   /* ── KIOSK SCREEN — LIGHT THEME ── */
   #screen-issuer { background: #EFF6FF; }
   .kiosk-idle {
@@ -868,6 +891,33 @@
         <div class="kbtn-sub">Standard service</div>
       </button>
       <div class="kiosk-back" onclick="kioskShowService()">&#8592; Back to services</div>
+    </div>
+  </div>
+
+  <!-- KIOSK: Already Has Ticket Warning (Option B) -->
+  <div class="kiosk-screen" id="kiosk-warn" style="display:none">
+    <div class="kiosk-header">
+      <div class="kiosk-header-hospital">Makati Medical Center</div>
+      <div class="kiosk-header-title">Central Registration</div>
+    </div>
+    <div class="kiosk-priority-body">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:52px;margin-bottom:8px;">⚠️</div>
+        <div style="font-size:18px;font-weight:700;color:#92400E;margin-bottom:6px;font-family:var(--font);">You already have a number</div>
+      </div>
+      <div style="background:#FFFBEB;border:1.5px solid #FCD34D;border-radius:12px;padding:16px;text-align:center;margin-bottom:20px;">
+        <div style="font-size:11px;color:#92400E;letter-spacing:1px;text-transform:uppercase;font-family:var(--font);">Your Queue Number</div>
+        <div id="kiosk-warn-num" style="font-family:var(--mono);font-size:52px;font-weight:700;color:#1B4F8A;line-height:1;margin-top:4px;"></div>
+        <div id="kiosk-warn-svc" style="font-size:13px;color:#64748B;margin-top:4px;font-family:var(--font);"></div>
+        <div id="kiosk-warn-time" style="font-size:11px;color:#94A3B8;margin-top:2px;font-family:var(--font);"></div>
+      </div>
+      <div style="font-size:14px;color:#78350F;text-align:center;margin-bottom:20px;line-height:1.6;font-family:var(--font);">Do you want to keep your existing number or get a different one?</div>
+      <button onclick="kioskWarnKeep()" style="background:#1B4F8A;color:white;border:none;border-radius:14px;padding:18px;text-align:center;width:100%;margin-bottom:10px;cursor:pointer;">
+        <div style="font-size:16px;font-weight:700;font-family:var(--font);">Keep my number</div>
+      </button>
+      <button onclick="kioskWarnNew()" style="background:white;border:1.5px solid #D6E4F7;border-radius:14px;padding:18px;text-align:center;width:100%;cursor:pointer;">
+        <div style="font-size:16px;font-weight:700;color:#1E3A5F;font-family:var(--font);">Get a different number</div>
+      </button>
     </div>
   </div>
 
@@ -1484,7 +1534,6 @@ let kioskIdleLongPress = null;
 function initIssuer() {
   requestWakeLock();
   // Only show STAFF button on tablet (screen > 768px)
-  // Hide it on mobile phones accessing via QR code
   var staffBtn = document.getElementById('kiosk-tl-btn');
   if (staffBtn) {
     if (window.innerWidth < 768) {
@@ -1493,6 +1542,8 @@ function initIssuer() {
   }
   setupKioskLongPress();
   kioskShowIdle();
+  // Start listening for patient's ticket status (QR mode only)
+  initIssuerAlerts();
 }
 
 function setupKioskLongPress() {
@@ -1523,23 +1574,25 @@ function kioskShowIdle() {
   document.getElementById('kiosk-idle').style.display = 'flex';
   document.getElementById('kiosk-service').style.display = 'none';
   document.getElementById('kiosk-priority').style.display = 'none';
+  document.getElementById('kiosk-warn').style.display = 'none';
   document.getElementById('kiosk-ticket').style.display = 'none';
-  // Show recalled ticket if patient already has one today
+  // Show recalled ticket only on patient's phone (QR mode), never on staff tablet
   try {
-    var saved = localStorage.getItem('bqms_my_ticket');
-    if (saved) {
-      var t = JSON.parse(saved);
-      var today = new Date().toLocaleDateString('en-PH');
-      var banner = document.getElementById('ki-recall-banner');
-      if (t.date === today && banner) {
-        document.getElementById('ki-recall-num').textContent = t.num;
-        document.getElementById('ki-recall-svc').textContent = t.svc;
-        document.getElementById('ki-recall-time').textContent = 'Issued at ' + t.time;
-        banner.style.display = 'block';
-      } else if (banner) {
-        banner.style.display = 'none';
-        // Clear old ticket from different day
-        if (t.date !== today) localStorage.removeItem('bqms_my_ticket');
+    var banner = document.getElementById('ki-recall-banner');
+    if (banner) banner.style.display = 'none';
+    if (_isKioskMode) {
+      var saved = localStorage.getItem('bqms_my_ticket');
+      if (saved) {
+        var t = JSON.parse(saved);
+        var today = new Date().toLocaleDateString('en-PH');
+        if (t.date === today) {
+          document.getElementById('ki-recall-num').textContent  = t.num;
+          document.getElementById('ki-recall-svc').textContent  = t.svc;
+          document.getElementById('ki-recall-time').textContent = 'Issued at ' + t.time;
+          banner.style.display = 'block';
+        } else {
+          localStorage.removeItem('bqms_my_ticket');
+        }
       }
     }
   } catch(e) {}
@@ -1547,15 +1600,58 @@ function kioskShowIdle() {
 
 function kioskWakeUp() {
   clearTimeout(kioskIdleTimer);
+  // Check if patient already has a ticket today (Option B) — QR mode only
+  try {
+    var saved = JSON.parse(localStorage.getItem('bqms_my_ticket') || 'null');
+    if (_isKioskMode && saved && saved.date === new Date().toLocaleDateString('en-PH')) {
+      // Show warning screen
+      document.getElementById('kiosk-warn-num').textContent  = saved.num;
+      document.getElementById('kiosk-warn-svc').textContent  = saved.svc;
+      document.getElementById('kiosk-warn-time').textContent = 'Issued at ' + saved.time;
+      document.getElementById('kiosk-idle').style.display    = 'none';
+      document.getElementById('kiosk-service').style.display = 'none';
+      document.getElementById('kiosk-priority').style.display= 'none';
+      document.getElementById('kiosk-warn').style.display    = 'flex';
+      document.getElementById('kiosk-ticket').style.display  = 'none';
+      kioskResetIdleTimer();
+      return;
+    }
+  } catch(e) {}
   kioskShowService();
   kioskResetIdleTimer();
 }
 window.kioskWakeUp = kioskWakeUp;
 
+window.kioskWarnKeep = function() {
+  // Patient wants to keep existing number — show it again
+  try {
+    var saved = JSON.parse(localStorage.getItem('bqms_my_ticket') || 'null');
+    if (saved) {
+      document.getElementById('kiosk-ticket-num').textContent = saved.num;
+      document.getElementById('kiosk-ticket-svc').textContent = saved.svc;
+      var badge = document.getElementById('kiosk-ticket-badge');
+      if (badge) badge.style.display = saved.priority ? 'inline-block' : 'none';
+    }
+  } catch(e) {}
+  document.getElementById('kiosk-warn').style.display   = 'none';
+  document.getElementById('kiosk-ticket').style.display = 'flex';
+  kioskStartReturnTimer();
+};
+
+window.kioskWarnNew = function() {
+  // Patient wants a new number — clear old ticket and go to service selection
+  try { localStorage.removeItem('bqms_my_ticket'); } catch(e) {}
+  _patientAlertShown = false;
+  document.getElementById('kiosk-warn').style.display = 'none';
+  kioskShowService();
+  kioskResetIdleTimer();
+};
+
 function kioskShowService() {
   document.getElementById('kiosk-idle').style.display = 'none';
   document.getElementById('kiosk-service').style.display = 'flex';
   document.getElementById('kiosk-priority').style.display = 'none';
+  document.getElementById('kiosk-warn').style.display = 'none';
   document.getElementById('kiosk-ticket').style.display = 'none';
   kioskResetIdleTimer();
 }
@@ -2992,8 +3088,117 @@ async function executeAutoReset() {
   }
 }
 
+// ── PATIENT ALERT (QR mode only) ──────────────────────────
+var _patientAlertListener = null;
+var _patientAlertShown = false;
+
+function startPatientAlertListener() {
+  if (!_isKioskMode) return;
+  try {
+    var saved = JSON.parse(localStorage.getItem('bqms_my_ticket') || 'null');
+    if (!saved || !saved.num) return;
+    var myTicket = saved.num;
+    var myPrefix = myTicket.charAt(0);
+
+    // Listen to queue for changes
+    var qRef = ref(db, 'queue');
+    _patientAlertListener = onValue(qRef, function(snap) {
+      if (!snap.exists()) return;
+      var waiting = [], myStatus = null, myCounter = '';
+
+      snap.forEach(function(child) {
+        var d = child.val();
+        if (d.ticketNumber === myTicket) {
+          myStatus = d.status;
+          myCounter = d.counterName || '';
+        }
+        // Count waiting tickets with same prefix ahead of mine
+        if (d.prefix === myPrefix && d.status === 'waiting') {
+          var theirNum = parseInt(d.ticketNumber.slice(1));
+          var myNum    = parseInt(myTicket.slice(1));
+          if (theirNum < myNum) waiting.push(d.ticketNumber);
+        }
+      });
+
+      if (myStatus === 'in_progress' && !_patientAlertShown) {
+        // Being called right now
+        _patientAlertShown = true;
+        showPatientAlert('now', myTicket, myCounter);
+      } else if (myStatus === 'waiting' && waiting.length === 1 && !_patientAlertShown) {
+        // 1 person ahead — get ready
+        showPatientAlert('next', myTicket, '');
+      } else if (myStatus === 'waiting' && waiting.length > 1) {
+        // Reset so alert can show again when they're next
+        _patientAlertShown = false;
+      }
+    });
+  } catch(e) { console.warn('Patient alert error:', e); }
+}
+
+function showPatientAlert(type, ticketNum, counterName) {
+  var el = document.getElementById('patient-alert');
+  if (!el) return;
+
+  // Vibrate phone if supported
+  if (navigator.vibrate) {
+    if (type === 'now') navigator.vibrate([300, 100, 300, 100, 300]);
+    else navigator.vibrate([200, 100, 200]);
+  }
+
+  // Play alert sound
+  try {
+    var ac = getAudioCtx();
+    if (ac) {
+      if (type === 'now') {
+        // Celebratory ascending ding
+        playBellTone(ac, 523.25, ac.currentTime + 0.05, 0.6, 0.4);
+        playBellTone(ac, 659.25, ac.currentTime + 0.47, 0.6, 0.4);
+        playBellTone(ac, 783.99, ac.currentTime + 0.89, 0.6, 0.4);
+        playBellTone(ac, 1046.5, ac.currentTime + 1.31, 1.0, 0.4);
+      } else {
+        // Two gentle pings
+        playBellTone(ac, 659.25, ac.currentTime + 0.05, 0.7, 0.3);
+        playBellTone(ac, 659.25, ac.currentTime + 0.55, 0.9, 0.3);
+      }
+    }
+  } catch(e) {}
+
+  el.className = '';
+  el.classList.add(type);
+  document.getElementById('pa-icon').textContent   = type === 'now' ? '🔔' : '⏰';
+  document.getElementById('pa-ticket').textContent = ticketNum;
+  document.getElementById('pa-title').textContent  = type === 'now' ? 'Your number is being called!' : 'Get ready — you are next!';
+  document.getElementById('pa-msg').textContent    = type === 'now'
+    ? 'Please proceed to the counter now.'
+    : 'One person ahead of you. Please return to the waiting area.';
+  document.getElementById('pa-counter').textContent = counterName ? 'Please go to ' + counterName : '';
+  el.style.display = 'flex';
+}
+
+window.dismissPatientAlert = function() {
+  var el = document.getElementById('patient-alert');
+  if (el) el.style.display = 'none';
+};
+
+// Start listening after kiosk login
+function initIssuerAlerts() {
+  if (_isKioskMode) {
+    setTimeout(startPatientAlertListener, 1500);
+  }
+}
+
 // Enter key on login
 document.getElementById('login-username').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-password').focus(); });
 </script>
+  <!-- Patient alert overlay — shown when number is next or being called -->
+  <div id="patient-alert">
+    <div class="pa-icon" id="pa-icon"></div>
+    <div class="pa-title" id="pa-title"></div>
+    <div class="pa-ticket" id="pa-ticket"></div>
+    <div class="pa-counter" id="pa-counter"></div>
+    <div class="pa-msg" id="pa-msg"></div>
+    <button class="pa-dismiss" onclick="dismissPatientAlert()">OK, I'm on my way</button>
+  </div>
+
 </body>
 </html>
