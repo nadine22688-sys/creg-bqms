@@ -3130,9 +3130,23 @@ function startPatientAlertListener() {
         // Ticket is being called right now — only reliable trigger
         _patientAlertShown = true;
         showPatientAlert('now', myTicket, myCounter);
-      } else if (!myStatus || myStatus === 'done' || myStatus === 'cancelled') {
-        // Ticket no longer active — reset
+      } else if (myStatus === 'done' || myStatus === 'cancelled') {
+        // Ticket served or cancelled — clear from memory so patient can get a new one
         _patientAlertShown = false;
+        try { localStorage.removeItem('bqms_my_ticket'); } catch(e) {}
+        if (_patientAlertListener) {
+          try { _patientAlertListener(); } catch(e) {}
+          _patientAlertListener = null;
+        }
+        // Refresh idle screen to remove recall banner
+        var banner = document.getElementById('ki-recall-banner');
+        if (banner) banner.style.display = 'none';
+      } else if (!myStatus) {
+        // Ticket not found in queue (archived after reset) — clear
+        _patientAlertShown = false;
+        try { localStorage.removeItem('bqms_my_ticket'); } catch(e) {}
+        var banner2 = document.getElementById('ki-recall-banner');
+        if (banner2) banner2.style.display = 'none';
       }
     });
   } catch(e) { console.warn('Patient alert error:', e); }
