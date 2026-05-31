@@ -932,7 +932,16 @@
       <div class="kiosk-ticket-number" id="kiosk-ticket-num">—</div>
       <div class="kiosk-ticket-svc" id="kiosk-ticket-svc"></div>
       <div class="kiosk-ticket-pr-badge" id="kiosk-ticket-badge" style="display:none">&#9733; Priority Lane</div>
-      <div class="kiosk-ticket-inst">Please remember your number.<br>Wait to be called at the counter.<br>You may sit in the waiting area.</div>
+      <!-- Photo reminder: shown on tablet kiosk only, hidden on QR phone -->
+      <div id="kiosk-photo-reminder" style="display:none;margin-top:22px;width:100%;background:#1B4F8A;border-radius:16px;padding:18px 16px;text-align:center;">
+        <div style="font-size:36px;margin-bottom:6px;">📸</div>
+        <div style="color:white;font-size:20px;font-weight:800;line-height:1.2;">Take a photo of your number!</div>
+        <div style="color:rgba(255,255,255,.8);font-size:13px;font-weight:500;margin-top:5px;">or write it on the paper provided</div>
+      </div>
+      <div class="kiosk-ticket-inst">
+        Wait to be called at the counter.<br>
+        You may sit in the waiting area.
+      </div>
       <div class="kiosk-ticket-timer" id="kiosk-timer">Returning to home in 5s...</div>
     </div>
   </div>
@@ -1707,6 +1716,9 @@ window.kioskIssueTicket = async function(isPriority) {
   document.getElementById('kiosk-service').style.display = 'none';
   document.getElementById('kiosk-priority').style.display = 'none';
   document.getElementById('kiosk-ticket').style.display = 'flex';
+  // Show photo reminder only on staff tablet (not QR phone)
+  var photoReminder = document.getElementById('kiosk-photo-reminder');
+  if (photoReminder) photoReminder.style.display = _isKioskMode ? 'none' : 'block';
 
   // Save ticket to localStorage so patient can recall it
   try {
@@ -1728,7 +1740,8 @@ window.kioskIssueTicket = async function(isPriority) {
 
 function kioskStartReturnTimer() {
   clearTimeout(kioskReturnTimer);
-  let secs = 5;
+  // Tablet kiosk: 10s (time to take photo), QR phone: 5s
+  let secs = _isKioskMode ? 5 : 10;
   const timerEl = document.getElementById('kiosk-timer');
   if (timerEl) timerEl.textContent = 'Returning to home in ' + secs + 's...';
   const interval = setInterval(function() {
